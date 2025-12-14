@@ -24,3 +24,10 @@ Untuk menjalankan MARS Music Player, pastikan lingkungan pengembangan Anda memen
 Buka terminal lalu jalankan perintah ini
 ```bash
 pip install pygame mutagen
+```
+
+## Eksekusi Program
+Kemudian sudah dapat jalankan aplikasinya
+```bash
+python MARS.py
+```
