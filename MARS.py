@@ -4,7 +4,7 @@ import os
 import random
 import json
 
-# --- CEK LIBRARY AUDIO ---
+#library audio
 try:
     from pygame import mixer
 except ImportError:
@@ -16,10 +16,7 @@ try:
 except ImportError:
     MP3 = None 
 
-# =========================================================
-# 1. BACKEND: DATA & LOGIKA (KODINGAN LAMA)
-# =========================================================
-
+#data dan logika
 class Lagu:
     def __init__(self, id_lagu, judul, artis, genre, filename):
         self.id = id_lagu
@@ -75,24 +72,21 @@ class DoublyLinkedList:
             curr = curr.next
         return nodes
 
-# =========================================================
-# 2. APLIKASI UTAMA (GUI GABUNGAN)
-# =========================================================
-
+#aplikasi utama
 class MarsPlayerApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("MARS Music Player - Final Edition") 
+        self.root.title("MARS MUSIC PLAYER") 
         self.root.geometry("1100x700")
         self.root.resizable(True, True) 
         self.root.minsize(900, 600)
         
-        # --- KONFIGURASI WARNA (TEMA BLACK PINK) ---
+        # --- TEMA BLACK PINK ---
         self.colors = {
             "bg_main": "#000000",      
             "bg_side": "#050505",      
             "player":  "#111111",      
-            "accent":  "#FF1493",      # Deep Pink
+            "accent":  "#FF1493",      
             "accent2": "#C71585",      
             "text":    "#FFFFFF",
             "card_bg": "#1A1A1A",
@@ -105,12 +99,11 @@ class MarsPlayerApp:
 
         self.root.configure(bg=self.colors["bg_main"])
 
-        # Init Audio
         if mixer: 
             try: mixer.init()
             except: pass
 
-        # --- DATA PLAYER (KODINGAN LAMA) ---
+        #Data Backend
         self.library = [] 
         self.playlists = { "Mood Today": [] } 
         self.queue_dll = DoublyLinkedList() 
@@ -121,7 +114,7 @@ class MarsPlayerApp:
         self.last_id = 0
         self.song_length = 0 
         
-        # --- DATA USER & LOGIN (FITUR BARU) ---
+        #Data User & Load Database
         self.current_user = None
         self.user_role = None 
         self.target_role = None 
@@ -129,31 +122,86 @@ class MarsPlayerApp:
         self.users = {} 
         self.load_users()
 
-        # Style Slider
+        #style
         self.style = ttk.Style()
         self.style.theme_use('clam')
         self.style.configure("Horizontal.TScale", background=self.colors["player"], 
                              troughcolor="#424141", borderwidth=0, 
                              lightcolor=self.colors["accent"], darkcolor=self.colors["accent"])
+        self.style.configure("Treeview", background=self.colors["bg_main"], foreground="white", fieldbackground=self.colors["bg_main"], borderwidth=0)
+        self.style.map('Treeview', background=[('selected', self.colors["accent"])])
+        self.style.configure("Treeview.Heading", background="#333", foreground="white", relief="flat")
 
-        # --- CONTAINER FRAME (Navigasi) ---
+        #container frame
         self.frame_landing = tk.Frame(self.root, bg=self.colors["bg_main"]) 
         self.frame_login = tk.Frame(self.root, bg=self.colors["bg_main"])   
         self.frame_home = tk.Frame(self.root, bg=self.colors["bg_main"])    
         self.frame_player = tk.Frame(self.root, bg=self.colors["bg_main"])  
 
-        # Setup UI
+        #setup ui
         self.setup_landing_ui()
         self.setup_login_ui()
         self.setup_home_ui()   
         self.setup_player_ui() 
         
         self.update_slider_loop() 
+        
+        # pilih folder
+        self.root.after(500, self.initial_folder_scan)
+        
         self.show_landing_page() 
 
-    # =========================================================
-    #  DATABASE USER (JSON)
-    # =========================================================
+    #auto load
+    def initial_folder_scan(self):
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        default_folder = os.path.join(script_dir, "music")
+        count = self.scan_and_add_songs(default_folder)
+        if count == 0:
+            if messagebox.askyesno("Musik Tidak Ditemukan", "Aplikasi tidak menemukan folder 'music' atau kosong.\n\nIngin memilih folder lagu di komputer Anda secara manual?"):
+                self.pilih_folder_lagu_manual()
+
+    def pilih_folder_lagu_manual(self):
+        folder_selected = filedialog.askdirectory(title="Pilih Folder Berisi Lagu")
+        if folder_selected:
+            count = self.scan_and_add_songs(folder_selected)
+            if count > 0:
+                self.show_custom_alert("Berhasil", f"Berhasil memuat {count} lagu dari folder tersebut!")
+                if self.active_playlist_name:
+                    self.refresh_view(self.active_playlist_name)
+            else:
+                self.show_custom_alert("Info", "Tidak ada file MP3/WAV di folder tersebut.", is_error=True)
+
+    def scan_and_add_songs(self, folder_path):
+        if not os.path.exists(folder_path): return 0
+        files = os.listdir(folder_path)
+        count = 0
+        for f in files:
+            if f.lower().endswith(('.mp3', '.wav', '.ogg')):
+                full_path = os.path.join(folder_path, f)
+                exists = False
+                for existing in self.library:
+                    if existing.filename == full_path:
+                        exists = True
+                        break
+                
+                if not exists:
+                    clean_name = os.path.splitext(f)[0]
+                    if " - " in clean_name:
+                        parts = clean_name.split(" - ")
+                        artis_lagu = parts[0]
+                        judul_lagu = parts[1]
+                    else:
+                        judul_lagu = clean_name
+                        artis_lagu = "Unknown Artist"
+
+                    self.last_id += 1
+                    lagu_baru = Lagu(self.last_id, judul_lagu, artis_lagu, "Pop", full_path)
+                    self.library.append(lagu_baru)
+                    self.playlists["Mood Today"].append(lagu_baru)
+                    count += 1
+        return count
+
+    #database user
     def load_users(self):
         if not os.path.exists(self.users_db_file):
             self.users = {} 
@@ -169,9 +217,23 @@ class MarsPlayerApp:
         with open(self.users_db_file, "w") as f:
             json.dump(self.users, f, indent=4)
 
-    # =========================================================
-    #  POP-UP CUSTOM (AGAR TEMA SERASI)
-    # =========================================================
+    #helper
+    def get_artist_color(self, artist_name):
+        key = artist_name.strip().lower()
+        if key not in self.artist_colors:
+            self.artist_colors[key] = random.choice(self.preset_colors)
+        return self.artist_colors[key]
+
+    def bind_recursive(self, widget, event, func):
+        widget.bind(event, func)
+        for child in widget.winfo_children():
+            self.bind_recursive(child, event, func)
+
+    def create_sidebar_btn(self, parent, text, cmd):
+        btn = tk.Button(parent, text=text, bg=self.colors["bg_side"], fg="#E0E0E0", bd=0, padx=10, pady=8, font=("Arial", 10), cursor="hand2", anchor="w", activebackground="#1F1F1F", command=cmd)
+        btn.pack(fill="x", padx=10)
+
+    #pop up custom
     def show_custom_alert(self, title, message, is_error=False):
         popup = tk.Toplevel(self.root)
         popup.configure(bg=self.colors["bg_main"])
@@ -193,8 +255,9 @@ class MarsPlayerApp:
     def show_custom_input(self, title, prompt):
         self.popup_input_val = None
         popup = tk.Toplevel(self.root)
-        popup.configure(bg=self.colors["bg_main"])
-        popup.overrideredirect(True)
+        popup.title(title)
+        popup.configure(bg=self.colors["popup_bg"])
+        popup.overrideredirect(True) 
         w, h = 400, 220
         x = self.root.winfo_rootx() + (self.root.winfo_width() // 2) - (w // 2)
         y = self.root.winfo_rooty() + (self.root.winfo_height() // 2) - (h // 2)
@@ -203,20 +266,20 @@ class MarsPlayerApp:
         frame_border.pack(fill="both", expand=True)
         frame_inner = tk.Frame(frame_border, bg=self.colors["card_bg"], padx=20, pady=20)
         frame_inner.pack(fill="both", expand=True)
-        tk.Label(frame_inner, text=title, font=("Arial", 14, "bold"), fg=self.colors["accent"], bg=self.colors["card_bg"]).pack(pady=(0, 10))
-        tk.Label(frame_inner, text=prompt, font=("Arial", 10), fg="white", bg=self.colors["card_bg"]).pack(pady=(0, 5))
-        entry = tk.Entry(frame_inner, font=("Arial", 12), bg=self.colors["input_bg"], fg="white", insertbackground="white", relief="flat", justify="center")
-        entry.pack(fill="x", pady=10, ipady=5)
+        tk.Label(frame_inner, text=title, font=("Arial", 14, "bold"), fg=self.colors["accent"], bg=self.colors["popup_bg"]).pack(pady=(20, 10))
+        tk.Label(frame_inner, text=prompt, font=("Arial", 10), fg="white", bg=self.colors["popup_bg"]).pack(pady=(0, 10))
+        entry = tk.Entry(frame_inner, font=("Arial", 12), bg="#333", fg="white", insertbackground="white", relief="flat", justify="center")
+        entry.pack(padx=30, ipady=5, fill="x")
         entry.focus_set()
-        btn_frame = tk.Frame(frame_inner, bg=self.colors["card_bg"])
-        btn_frame.pack(pady=10)
+        btn_frame = tk.Frame(frame_inner, bg=self.colors["popup_bg"])
+        btn_frame.pack(pady=20)
         def on_ok():
             self.popup_input_val = entry.get()
             popup.destroy()
         def on_cancel():
             popup.destroy()
         tk.Button(btn_frame, text="OK", command=on_ok, bg=self.colors["accent"], fg="white", font=("Arial", 10, "bold"), bd=0, padx=15, pady=5).pack(side="left", padx=10)
-        tk.Button(btn_frame, text="Batal", command=on_cancel, bg="#444", fg="white", font=("Arial", 10), bd=0, padx=15, pady=5).pack(side="left", padx=10)
+        tk.Button(btn_frame, text="BATAL", command=on_cancel, bg="#444", fg="white", font=("Arial", 10), bd=0, padx=15, pady=5).pack(side="left", padx=10)
         self.root.wait_window(popup)
         return self.popup_input_val
 
@@ -229,13 +292,13 @@ class MarsPlayerApp:
         x = self.root.winfo_rootx() + (self.root.winfo_width() // 2) - (w // 2)
         y = self.root.winfo_rooty() + (self.root.winfo_height() // 2) - (h // 2)
         popup.geometry(f"{w}x{h}+{x}+{y}")
-        frame_border = tk.Frame(popup, bg=self.colors["accent"], padx=2, pady=2)
-        frame_border.pack(fill="both", expand=True)
-        frame_inner = tk.Frame(frame_border, bg=self.colors["card_bg"], padx=20, pady=20)
-        frame_inner.pack(fill="both", expand=True)
-        tk.Label(frame_inner, text=title, font=("Arial", 14, "bold"), fg=self.colors["accent"], bg=self.colors["card_bg"]).pack(pady=(0, 10))
-        tk.Label(frame_inner, text=message, font=("Arial", 10), fg="white", bg=self.colors["card_bg"], wraplength=320).pack(pady=(0, 20))
-        btn_frame = tk.Frame(frame_inner, bg=self.colors["card_bg"])
+        border_frame = tk.Frame(popup, bg=self.colors["accent"], padx=2, pady=2)
+        border_frame.pack(fill="both", expand=True)
+        main_frame = tk.Frame(border_frame, bg=self.colors["popup_bg"])
+        main_frame.pack(fill="both", expand=True)
+        tk.Label(main_frame, text=title, font=("Arial", 14, "bold"), fg=self.colors["accent"], bg=self.colors["popup_bg"]).pack(pady=(25, 10))
+        tk.Label(main_frame, text=message, font=("Arial", 10), fg="white", bg=self.colors["popup_bg"], wraplength=300).pack(pady=(0, 20))
+        btn_frame = tk.Frame(main_frame, bg=self.colors["popup_bg"])
         btn_frame.pack()
         def on_yes():
             self.popup_yesno_val = True
@@ -248,9 +311,7 @@ class MarsPlayerApp:
         self.root.wait_window(popup)
         return self.popup_yesno_val
 
-    # =========================================================
-    #  NAVIGASI HALAMAN
-    # =========================================================
+    #navigasi halaman
     def show_landing_page(self):
         self.frame_home.pack_forget()
         self.frame_player.pack_forget()
@@ -273,13 +334,29 @@ class MarsPlayerApp:
         self.frame_home.pack(fill="both", expand=True)
         
         if self.user_role == "admin":
+            self.btn_admin_panel.place(relx=0.05, rely=0.1, anchor="nw")
             self.lbl_role_status.config(text="Mode: Administrator", fg=self.colors["accent"])
+            self.btn_add_manual.pack(pady=5)
+            self.btn_add_folder.pack(pady=5)
         else:
+            self.btn_admin_panel.place_forget()
             self.lbl_role_status.config(text="Mode: Pengguna", fg="gray")
+            self.btn_add_manual.pack_forget()
+            self.btn_add_folder.pack_forget()
 
     def show_player_page(self):
         self.frame_home.pack_forget() 
         self.frame_player.pack(fill="both", expand=True) 
+        
+        #refresh
+        for widget in self.library_container.winfo_children():
+            widget.destroy()
+        
+        self.create_sidebar_btn(self.library_container, "✨  Buat Playlist", self.buat_playlist_baru)
+        if self.user_role == "admin":
+            self.create_sidebar_btn(self.library_container, "➕  Tambah Lagu (Manual)", self.tambah_lagu_file)
+            self.create_sidebar_btn(self.library_container, "📂  Tambah Satu Folder", self.tambah_lagu_folder)
+
         self.refresh_view("Mood Today") 
 
     def logout(self):
@@ -287,9 +364,7 @@ class MarsPlayerApp:
         self.user_role = None
         self.show_landing_page()
 
-    # =========================================================
-    #  UI 1: LANDING PAGE (PILIHAN)
-    # =========================================================
+    #landing halaman
     def setup_landing_ui(self):
         box = tk.Frame(self.frame_landing, bg=self.colors["card_bg"], padx=60, pady=60)
         box.place(relx=0.5, rely=0.5, anchor="center")
@@ -313,9 +388,7 @@ class MarsPlayerApp:
                             bd=0, cursor="hand2")
         btn_reg.pack()
 
-    # =========================================================
-    #  UI 2: FORM LOGIN + RESET PASSWORD
-    # =========================================================
+    #login dan reset
     def setup_login_ui(self):
         login_box = tk.Frame(self.frame_login, bg=self.colors["card_bg"], padx=50, pady=50)
         login_box.place(relx=0.5, rely=0.5, anchor="center")
@@ -340,8 +413,7 @@ class MarsPlayerApp:
                              bg="#222", fg="gray", font=("Arial", 10), bd=0, pady=5, cursor="hand2")
         btn_back.pack(fill="x")
 
-        # --- TOMBOL LUPA PASSWORD (FITUR BARU) ---
-        tk.Label(login_box, text="", font=("Arial", 5), bg=self.colors["card_bg"]).pack() 
+        tk.Label(login_box, text="", font=("Arial", 5), bg=self.colors["card_bg"]).pack()
         btn_lupa = tk.Button(login_box, text="Lupa Password?", command=self.proses_lupa_password,
                              bg=self.colors["card_bg"], fg=self.colors["accent"], font=("Arial", 9, "underline"),
                              bd=0, cursor="hand2")
@@ -360,7 +432,6 @@ class MarsPlayerApp:
             real_role = self.users[username]["role"]
 
             if password == stored_pass:
-                # Validasi Role agar User tidak masuk ke Admin dan sebaliknya
                 if self.target_role == "admin" and real_role != "admin":
                     self.show_custom_alert("Akses Ditolak", "Akun ini bukan Admin!\nSilakan login sebagai Pengguna.", is_error=True)
                     return
@@ -377,7 +448,7 @@ class MarsPlayerApp:
             else:
                 self.show_custom_alert("Gagal", "Password salah!", is_error=True)
         else:
-            self.show_custom_alert("Gagal", "Username tidak ditemukan.\nSilakan Daftar Baru dulu.", is_error=True)
+            self.show_custom_alert("Gagal", "Username tidak ditemukan.\nSilakan Daftar Baru.", is_error=True)
 
     def proses_register_dialog(self):
         uname = self.show_custom_input("Daftar", "Buat Username Baru:")
@@ -392,11 +463,10 @@ class MarsPlayerApp:
         is_admin = self.show_custom_yesno("Pilih Peran", "Apakah akun ini untuk ADMIN?\n(Pilih YA untuk Admin, TIDAK untuk User Biasa)")
         role_dipilih = "admin" if is_admin else "user"
 
-        #BATASAN ADMIN
         if role_dipilih == "admin":
             jumlah_admin = sum(1 for u in self.users.values() if u["role"] == "admin")
-            if jumlah_admin >= 5:
-                self.show_custom_alert("Gagal", "Kuota Admin sudah penuh (Max 5).\nSilakan daftar sebagai User biasa.", is_error=True)
+            if jumlah_admin >= 3:
+                self.show_custom_alert("Gagal", "Kuota Admin sudah penuh (Max 3).\nSilakan daftar sebagai User biasa.", is_error=True)
                 return
 
         self.users[uname] = {"password": pwd, "role": role_dipilih, "name": uname}
@@ -406,7 +476,6 @@ class MarsPlayerApp:
         self.show_custom_alert("Berhasil", f"Akun {jenis} berhasil dibuat!\nSilakan Login.")
 
     def proses_lupa_password(self):
-        """Fitur Reset Password Sendiri"""
         uname = self.show_custom_input("Lupa Password", "Masukkan Username Anda:")
         if not uname: return
 
@@ -421,9 +490,80 @@ class MarsPlayerApp:
         self.save_users()
         self.show_custom_alert("Sukses", "Password berhasil diubah.\nSilakan Login kembali.")
 
-    # =========================================================
-    #  UI 3: HOME DASHBOARD
-    # =========================================================
+    #panel
+    def open_admin_panel(self):
+        if self.user_role != "admin": return
+
+        panel = tk.Toplevel(self.root)
+        panel.title("Panel Admin")
+        panel.configure(bg=self.colors["bg_main"])
+        panel.geometry("600x450")
+        
+        tk.Label(panel, text="MANAJEMEN PENGGUNA", font=("Helvetica", 16, "bold"), fg=self.colors["accent"], bg=self.colors["bg_main"]).pack(pady=15)
+        
+        list_frame = tk.Frame(panel, bg=self.colors["bg_main"])
+        list_frame.pack(fill="both", expand=True, padx=20)
+
+        columns = ("Username", "Password", "Role")
+        tree = ttk.Treeview(list_frame, columns=columns, show="headings", height=10)
+        tree.heading("Username", text="Username")
+        tree.heading("Password", text="Password") 
+        tree.heading("Role", text="Role")
+        tree.column("Username", width=150)
+        tree.column("Password", width=150)
+        tree.column("Role", width=100)
+        tree.pack(side="left", fill="both", expand=True)
+        
+        scrollbar = ttk.Scrollbar(list_frame, orient="vertical", command=tree.yview)
+        scrollbar.pack(side="right", fill="y")
+        tree.configure(yscrollcommand=scrollbar.set)
+
+        def refresh_table():
+            for item in tree.get_children():
+                tree.delete(item)
+            for uname, data in self.users.items():
+                tree.insert("", "end", values=(uname, data["password"], data["role"]))
+        refresh_table()
+
+        btn_frame = tk.Frame(panel, bg=self.colors["bg_main"])
+        btn_frame.pack(pady=20)
+
+        def admin_reset_password():
+            selected = tree.selection()
+            if not selected: 
+                self.show_custom_alert("Pilih User", "Pilih user di tabel dulu!", is_error=True)
+                return
+            uname = tree.item(selected)['values'][0]
+            new_pass = simpledialog.askstring("Reset Password", f"Password Baru untuk {uname}:", parent=panel)
+            if new_pass:
+                self.users[uname]["password"] = new_pass
+                self.save_users()
+                refresh_table()
+                messagebox.showinfo("Sukses", "Password diubah.", parent=panel)
+
+        def delete_user():
+            selected = tree.selection()
+            if not selected: return
+            uname = tree.item(selected)['values'][0]
+            if uname == self.current_user:
+                messagebox.showerror("Error", "Tidak bisa hapus akun sendiri!", parent=panel)
+                return
+            if messagebox.askyesno("Hapus", f"Hapus user {uname}?", parent=panel):
+                del self.users[uname]
+                self.save_users()
+                refresh_table()
+
+        tk.Button(btn_frame, text="RESET PASSWORD", command=admin_reset_password, bg=self.colors["accent"], fg="white", width=20, pady=5, bd=0).pack(side="left", padx=10)
+        tk.Button(btn_frame, text="HAPUS USER", command=delete_user, bg="red", fg="white", width=20, pady=5, bd=0).pack(side="left", padx=10)
+
+    def change_own_password(self):
+        new_pass = self.show_custom_input("Ganti Password", "Masukkan Password Baru:")
+        if new_pass:
+            self.users[self.current_user]["password"] = new_pass
+            self.save_users()
+            self.show_custom_alert("Sukses", "Password berhasil diganti!")
+
+    #dashboard home
     def setup_home_ui(self):
         header = tk.Frame(self.frame_home, height=300, bg=self.colors["accent"])
         header.pack(fill="x", side="top")
@@ -434,6 +574,13 @@ class MarsPlayerApp:
         cv.create_oval(-100, -100, 400, 400, fill=self.colors["accent2"], outline="")
         cv.create_text(50, 150, text="MARS MUSIC", fill="white", font=("Helvetica", 60, "bold"), anchor="w")
         cv.create_text(55, 210, text="Dengarkan musik sesuai suasana hatimu.", fill="#FFE4E1", font=("Arial", 14), anchor="w")
+
+        self.btn_admin_panel = tk.Button(header, text="🔧 ADMIN PANEL", command=self.open_admin_panel, 
+                               bg="#333", fg="white", bd=0, font=("Arial", 10, "bold"), cursor="hand2")
+        
+        btn_chg_pass = tk.Button(header, text="GANTI PASSWORD", command=self.change_own_password, 
+                               bg=self.colors["accent2"], fg="white", bd=0, font=("Arial", 10, "bold"), cursor="hand2")
+        btn_chg_pass.place(relx=0.85, rely=0.1, anchor="ne")
 
         btn_logout = tk.Button(header, text="LOGOUT", command=self.logout, 
                                bg="red", fg="white", bd=0, font=("Arial", 10, "bold"), cursor="hand2")
@@ -456,14 +603,16 @@ class MarsPlayerApp:
                               bd=0, padx=40, pady=15, cursor="hand2")
         btn_start.pack(pady=10)
 
-        btn_add = tk.Button(center, text="➕  Tambah Lagu Baru", command=self.tambah_lagu_file, 
+        #tambah lagu
+        self.btn_add_manual = tk.Button(center, text="➕  Tambah Lagu (Manual)", command=self.tambah_lagu_file, 
                             bg="#333", fg="white", font=("Arial", 11), 
-                            bd=0, padx=30, pady=10, cursor="hand2")
-        btn_add.pack(pady=5)
+                            bd=0, padx=30, pady=5, cursor="hand2")
 
-    # =========================================================
-    #  UI 4: PLAYER MUSIK (KODINGAN LAMA TERINTEGRASI)
-    # =========================================================
+        self.btn_add_folder = tk.Button(center, text="📂  Tambah Satu Folder", command=self.tambah_lagu_folder, 
+                            bg="#333", fg="white", font=("Arial", 11), 
+                            bd=0, padx=30, pady=5, cursor="hand2")
+
+    #player musk
     def setup_player_ui(self):
         sidebar = tk.Frame(self.frame_player, bg=self.colors["bg_side"], width=220)
         sidebar.pack(side="left", fill="y")
@@ -483,13 +632,16 @@ class MarsPlayerApp:
         self.entry_search.bind("<KeyRelease>", self.aksi_cari_lagu)
 
         tk.Label(sidebar, text="LIBRARY", bg=self.colors["bg_side"], fg="grey", font=("Arial", 9, "bold")).pack(anchor="w", padx=25, pady=(20, 10))
-        self.create_sidebar_btn(sidebar, "➕  Tambah Lagu", self.tambah_lagu_file)
-        self.create_sidebar_btn(sidebar, "✨  Buat Playlist", self.buat_playlist_baru)
+        
+        #container tombol dinamis
+        self.library_container = tk.Frame(sidebar, bg=self.colors["bg_side"])
+        self.library_container.pack(fill="both")
 
         tk.Label(sidebar, text="PLAYLIST KAMU", bg=self.colors["bg_side"], fg="grey", font=("Arial", 9, "bold")).pack(anchor="w", padx=25, pady=(20, 10))
         self.playlist_sidebar_container = tk.Frame(sidebar, bg=self.colors["bg_side"])
         self.playlist_sidebar_container.pack(fill="both", padx=10)
 
+        #konten utama
         self.main_container = tk.Frame(self.frame_player, bg=self.colors["bg_main"])
         self.main_container.pack(side="top", fill="both", expand=True)
 
@@ -512,6 +664,7 @@ class MarsPlayerApp:
         self.scrollbar.pack(side="right", fill="y")
         self.canvas_scroll.configure(yscrollcommand=self.scrollbar.set)
 
+        #footer
         control_bar = tk.Frame(self.frame_player, bg=self.colors["player"], height=90)
         control_bar.pack(side="bottom", fill="x")
         control_bar.pack_propagate(False)
@@ -553,11 +706,69 @@ class MarsPlayerApp:
         tk.Button(right_frame, text="🗑️", bg=self.colors["player"], fg=self.colors["accent"], bd=0, font=("Arial", 16), cursor="hand2", command=self.hapus_lagu_terpilih).pack(side="left", padx=10)
         tk.Button(right_frame, text="➜ Pindah", bg=self.colors["player"], fg="white", bd=0, font=("Arial", 10), cursor="hand2", command=self.pindah_playlist_dialog).pack(side="left", padx=10)
 
-    # --- LOGIKA PLAYER ---
+    #fungsi aksi lagu pencarian
+    def aksi_cari_lagu(self, event):
+        keyword = self.entry_search.get().lower()
+        sumber = self.playlists[self.active_playlist_name]
+        hasil_cari = [l for l in sumber if keyword in l.judul.lower() or keyword in l.artis.lower()]
+        for widget in self.cards_frame.winfo_children(): widget.destroy()
+        row, col, max_cols = 0, 0, 4
+        for index, lagu in enumerate(hasil_cari):
+            card = tk.Frame(self.cards_frame, bg="#333333", width=190, height=250)
+            card.grid(row=row, column=col, padx=10, pady=15)
+            card.pack_propagate(False)
+            artist_color = self.get_artist_color(lagu.artis)
+            try: idx_asli = sumber.index(lagu)
+            except ValueError: continue
+            click_cmd = lambda e, idx=idx_asli: self.play_from_index(idx)
+            cover = tk.Frame(card, bg=artist_color, height=180)
+            cover.pack(fill="x")
+            lbl_icon = tk.Label(cover, text="🔍", font=("Arial", 40), bg=artist_color, fg="white")
+            lbl_icon.place(relx=0.5, rely=0.5, anchor="center")
+            lbl_title = tk.Label(card, text=lagu.judul, font=("Arial", 11, "bold"), bg="#333333", fg="white")
+            lbl_title.pack(pady=(10,0))
+            self.bind_recursive(card, "<Button-1>", click_cmd)
+            col += 1
+            if col >= max_cols: col=0; row+=1
+
+    #fungsi lain player
     def go_to_mood_today(self):
         self.active_playlist_name = "Mood Today"
         self.refresh_view("Mood Today")
         self.refresh_sidebar_playlists()
+
+    def tambah_lagu_file(self):
+        """Manual Add Single File (Admin)"""
+        filepath = filedialog.askopenfilename(filetypes=[("Audio Files", "*.mp3 *.wav")])
+        if not filepath: return
+        filename = os.path.basename(filepath)
+        judul = self.show_custom_input("Tambah Lagu", f"Judul Lagu ({filename}):")
+        if not judul: judul = filename
+        artis = self.show_custom_input("Tambah Lagu", "Nama Artis:")
+        if not artis: artis = "Unknown"
+
+        self.last_id += 1
+        lagu_baru = Lagu(self.last_id, judul, artis, "Pop", filepath)
+        self.library.append(lagu_baru)
+        if lagu_baru not in self.playlists["Mood Today"]:
+            self.playlists["Mood Today"].append(lagu_baru)
+        if self.active_playlist_name != "Mood Today":
+            self.playlists[self.active_playlist_name].append(lagu_baru)
+        
+        self.refresh_view(self.active_playlist_name)
+        self.show_custom_alert("Berhasil", "Lagu berhasil ditambahkan!")
+
+    def tambah_lagu_folder(self):
+        """Manual Add Folder (Admin)"""
+        folder_selected = filedialog.askdirectory(title="Pilih Folder Lagu")
+        if folder_selected:
+            count = self.scan_and_add_songs(folder_selected)
+            if count > 0:
+                self.show_custom_alert("Berhasil", f"Berhasil memuat {count} lagu dari folder tersebut!")
+                if self.active_playlist_name:
+                    self.refresh_view(self.active_playlist_name)
+            else:
+                self.show_custom_alert("Info", "Tidak ada file musik baru di folder itu.", is_error=True)
 
     def open_playlist_detail(self, playlist_name):
         self.active_playlist_name = playlist_name
@@ -628,88 +839,7 @@ class MarsPlayerApp:
 
             col += 1
             if col >= max_cols: col=0; row+=1
-
-    # --- FUNGSI AUDIO DAN LAIN-LAIN ---
-    def get_artist_color(self, artist_name):
-        key = artist_name.strip().lower()
-        if key not in self.artist_colors:
-            self.artist_colors[key] = random.choice(self.preset_colors)
-        return self.artist_colors[key]
-
-    def bind_recursive(self, widget, event, func):
-        widget.bind(event, func)
-        for child in widget.winfo_children():
-            self.bind_recursive(child, event, func)
-
-    def create_sidebar_btn(self, parent, text, cmd):
-        btn = tk.Button(parent, text=text, bg=self.colors["bg_side"], fg="#E0E0E0", bd=0, padx=10, pady=8, font=("Arial", 10), cursor="hand2", anchor="w", activebackground="#1F1F1F", command=cmd)
-        btn.pack(fill="x", padx=10)
-
-    def pindah_playlist_dialog(self):
-        if not self.current_node:
-             self.show_custom_alert("Info", "Putar dulu lagu yang ingin dipindahkan.")
-             return
-        lagu = self.current_node.data
-        opsi = [k for k in self.playlists.keys() if k != "Mood Today"]
-        if not opsi:
-            self.show_custom_alert("Info", "Kamu belum membuat playlist lain.")
-            return
-
-        msg = f"Ketik nama playlist tujuan:\n({', '.join(opsi)})"
-        tujuan = self.show_custom_input("Pindah Lagu", msg)
-
-        if tujuan and tujuan in self.playlists:
-            if lagu not in self.playlists[tujuan]:
-                self.playlists[tujuan].append(lagu)
-                self.show_custom_alert("Sukses", f"Lagu disalin ke playlist '{tujuan}'.")
-            else:
-                self.show_custom_alert("Info", "Lagu sudah ada di playlist tersebut.")
-        elif tujuan:
-             self.show_custom_alert("Error", "Playlist tidak ditemukan!", is_error=True)
-
-    def hapus_lagu_terpilih(self):
-        if not self.current_node:
-             self.show_custom_alert("Info", "Putar lagu yang ingin dihapus terlebih dahulu.")
-             return
-        
-        if self.user_role != "admin":
-            self.show_custom_alert("Akses Ditolak", "Hanya Admin yang dapat menghapus lagu.", is_error=True)
-            return
-
-        lagu = self.current_node.data
-        if self.show_custom_yesno("Konfirmasi", f"Yakin hapus '{lagu.judul}'?"):
-            if lagu in self.playlists[self.active_playlist_name]:
-                self.playlists[self.active_playlist_name].remove(lagu)
-            mixer.music.stop()
-            self.is_playing = False
-            self.lbl_now_playing.config(text="Terhapus")
-            self.update_play_button_icon()
-            self.refresh_view(self.active_playlist_name)
-
-    def aksi_cari_lagu(self, event):
-        keyword = self.entry_search.get().lower()
-        sumber = self.playlists[self.active_playlist_name]
-        hasil_cari = [l for l in sumber if keyword in l.judul.lower() or keyword in l.artis.lower()]
-        for widget in self.cards_frame.winfo_children(): widget.destroy()
-        row, col, max_cols = 0, 0, 4
-        for index, lagu in enumerate(hasil_cari):
-            card = tk.Frame(self.cards_frame, bg="#333333", width=190, height=250)
-            card.grid(row=row, column=col, padx=10, pady=15)
-            card.pack_propagate(False)
-            artist_color = self.get_artist_color(lagu.artis)
-            try: idx_asli = sumber.index(lagu)
-            except ValueError: continue
-            click_cmd = lambda e, idx=idx_asli: self.play_from_index(idx)
-            cover = tk.Frame(card, bg=artist_color, height=180)
-            cover.pack(fill="x")
-            lbl_icon = tk.Label(cover, text="🔍", font=("Arial", 40), bg=artist_color, fg="white")
-            lbl_icon.place(relx=0.5, rely=0.5, anchor="center")
-            lbl_title = tk.Label(card, text=lagu.judul, font=("Arial", 11, "bold"), bg="#333333", fg="white")
-            lbl_title.pack(pady=(10,0))
-            self.bind_recursive(card, "<Button-1>", click_cmd)
-            col += 1
-            if col >= max_cols: col=0; row+=1
-
+            
     def play_from_index(self, index):
         node = self.queue_dll.get_node_at_index(index)
         if node: self.play_node(node)
@@ -805,7 +935,75 @@ class MarsPlayerApp:
     def geser_slider(self, val):
         pass
 
+    def pindah_playlist_dialog(self):
+        if not self.current_node:
+             self.show_custom_alert("Info", "Putar dulu lagu yang ingin dipindahkan.")
+             return
+        lagu = self.current_node.data
+        opsi = [k for k in self.playlists.keys() if k != "Mood Today"]
+        if not opsi:
+            self.show_custom_alert("Info", "Kamu belum membuat playlist lain.")
+            return
+
+        msg = f"Ketik nama playlist tujuan:\n({', '.join(opsi)})"
+        tujuan = self.show_custom_input("Pindah Lagu", msg)
+
+        if tujuan and tujuan in self.playlists:
+            if lagu not in self.playlists[tujuan]:
+                self.playlists[tujuan].append(lagu)
+                self.show_custom_alert("Sukses", f"Lagu disalin ke playlist '{tujuan}'.")
+            else:
+                self.show_custom_alert("Info", "Lagu sudah ada di playlist tersebut.")
+        elif tujuan:
+             self.show_custom_alert("Error", "Playlist tidak ditemukan!", is_error=True)
+
+    def hapus_lagu_terpilih(self):
+        if not self.current_node:
+             self.show_custom_alert("Info", "Putar lagu yang ingin dihapus terlebih dahulu.")
+             return
+        
+        if self.user_role != "admin":
+            self.show_custom_alert("Akses Ditolak", "Hanya Admin yang dapat menghapus lagu.", is_error=True)
+            return
+
+        lagu = self.current_node.data
+        if self.show_custom_yesno("Konfirmasi", f"Yakin hapus '{lagu.judul}'?"):
+            if lagu in self.playlists[self.active_playlist_name]:
+                self.playlists[self.active_playlist_name].remove(lagu)
+            mixer.music.stop()
+            self.is_playing = False
+            self.lbl_now_playing.config(text="Terhapus")
+            self.update_play_button_icon()
+            self.refresh_view(self.active_playlist_name)
+
+    #fungsi pencarian
+    def aksi_cari_lagu(self, event):
+        keyword = self.entry_search.get().lower()
+        sumber = self.playlists[self.active_playlist_name]
+        hasil_cari = [l for l in sumber if keyword in l.judul.lower() or keyword in l.artis.lower()]
+        for widget in self.cards_frame.winfo_children(): widget.destroy()
+        row, col, max_cols = 0, 0, 4
+        for index, lagu in enumerate(hasil_cari):
+            card = tk.Frame(self.cards_frame, bg="#333333", width=190, height=250)
+            card.grid(row=row, column=col, padx=10, pady=15)
+            card.pack_propagate(False)
+            artist_color = self.get_artist_color(lagu.artis)
+            try: idx_asli = sumber.index(lagu)
+            except ValueError: continue
+            click_cmd = lambda e, idx=idx_asli: self.play_from_index(idx)
+            cover = tk.Frame(card, bg=artist_color, height=180)
+            cover.pack(fill="x")
+            lbl_icon = tk.Label(cover, text="🔍", font=("Arial", 40), bg=artist_color, fg="white")
+            lbl_icon.place(relx=0.5, rely=0.5, anchor="center")
+            lbl_title = tk.Label(card, text=lagu.judul, font=("Arial", 11, "bold"), bg="#333333", fg="white")
+            lbl_title.pack(pady=(10,0))
+            self.bind_recursive(card, "<Button-1>", click_cmd)
+            col += 1
+            if col >= max_cols: col=0; row+=1
+
+    #khusus admin fungsi tambahan
     def tambah_lagu_file(self):
+        """Manual Add Single File (Admin)"""
         filepath = filedialog.askopenfilename(filetypes=[("Audio Files", "*.mp3 *.wav")])
         if not filepath: return
         filename = os.path.basename(filepath)
@@ -821,9 +1019,21 @@ class MarsPlayerApp:
             self.playlists["Mood Today"].append(lagu_baru)
         if self.active_playlist_name != "Mood Today":
             self.playlists[self.active_playlist_name].append(lagu_baru)
-
+        
         self.refresh_view(self.active_playlist_name)
         self.show_custom_alert("Berhasil", "Lagu berhasil ditambahkan!")
+
+    def tambah_lagu_folder(self):
+        """Manual Add Folder (Admin)"""
+        folder_selected = filedialog.askdirectory(title="Pilih Folder Lagu")
+        if folder_selected:
+            count = self.scan_and_add_songs(folder_selected)
+            if count > 0:
+                self.show_custom_alert("Berhasil", f"Berhasil memuat {count} lagu dari folder tersebut!")
+                if self.active_playlist_name:
+                    self.refresh_view(self.active_playlist_name)
+            else:
+                self.show_custom_alert("Info", "Tidak ada file musik baru di folder itu.", is_error=True)
 
     def buat_playlist_baru(self):
         nama = self.show_custom_input("Buat Playlist", "Masukkan Nama Playlist Baru:")
@@ -839,4 +1049,6 @@ class MarsPlayerApp:
 if __name__ == "__main__":
     root = tk.Tk()
     app = MarsPlayerApp(root)
+    #scan di panggil setelah window siap
+    root.after(500, app.initial_folder_scan)
     root.mainloop()
