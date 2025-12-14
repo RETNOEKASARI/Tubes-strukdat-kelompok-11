@@ -14,18 +14,13 @@ Struktur data utama yang digunakan untuk mengelola antrian lagu (Playlist/Queue)
 ## Cara Menjalankan Aplikasi
 ## Persyaratan
 Untuk menjalankan MARS Music Player, pastikan lingkungan pengembangan Anda memenuhi kriteria berikut:
-## 1. Python 3.x: (Direkomendasikan versi terbaru untuk stabilitas).
-## 2. Tkinter: (Perlu untuk antarmuka GUI, umumnya sudah terpasang bersama instalasi standar Python).
-## 3. Pygame Library: Digunakan khusus untuk modul mixer yang menangani pemutaran audio (playback) secara cross-platform.
-## 4. Mutagen Library: Digunakan untuk membaca dan mengekstrak metadata dari file audio (misalnya durasi lagu, judul, dan artis).
+1. Python 3.x: (Direkomendasikan versi terbaru untuk stabilitas).
+2. Tkinter: (Perlu untuk antarmuka GUI, umumnya sudah terpasang bersama instalasi standar Python).
+3. Pygame Library: Digunakan khusus untuk modul mixer yang menangani pemutaran audio (playback) secara cross-platform.
+4. Mutagen Library: Digunakan untuk membaca dan mengekstrak metadata dari file audio (misalnya durasi lagu, judul, dan artis).
 
 
 ## Instalasi
 Buka terminal lalu jalankan perintah ini
 ```bash
 pip install pygame mutagen
-
-Eksekusi program
-Setelah dependensi terinstal dan file audio (.mp3 atau .wav) sudah dimasukkan ke dalam folder music/, jalankan aplikasi:
-```bash
-python MARS.py
